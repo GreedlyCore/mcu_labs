@@ -58,7 +58,7 @@ static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN 0 */
 // TODO: TYPE OF WORK --> 3
 
-uint8_t cmd[] = "0"; // cmd PING by default
+uint8_t cmd[] = "00"; // cmd PING by default
 /*
  * AVAILABLE COMMANDS:
  * P:  PING -> "PING"
@@ -68,10 +68,11 @@ uint8_t cmd[] = "0"; // cmd PING by default
  * S:  STATE -> "11100011" , "1" if led turned on ,else turned off
  * */
 void ping(){
-	HAL_UART_Transmit_IT(&huart2, cmd, 1);
+	HAL_UART_Transmit_IT(&huart2, (uint8_t *) cmd[0], 1);
 }
 
 void leds_state(){
+	HAL_UART_Transmit_IT(&huart2, (uint8_t *) cmd[1], 1);
 
 }
 
@@ -79,9 +80,10 @@ void leds_state(){
 #define LED_PIN_MASK 0x0FF0 // 0000 1111 1111 0000
 
 
-void add(uint8_t counter) {
+void leds(uint8_t counter) {
 //	counter = (counter + 1) & 0xFF;
     GPIOC->BSRR = ((~counter << 4) & LED_PIN_MASK) << 16 | ((counter << 4) & LED_PIN_MASK);
+	HAL_UART_Transmit_IT(&huart2, (uint8_t *) cmd[0], 1);
 }
 
 /* USER CODE END 0 */
@@ -117,36 +119,36 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart2, cmd, 1);
-  int x = 0;
+  HAL_UART_Receive_IT(&huart2, cmd, 2);
+//  int x = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-
-
-	  x++;
+  while (1) {
+//	  x++;
 	  switch (cmd[0]) {
 	    case 'P':
 	    	ping();
 	    	cmd[0] = 'r';
 	      break;
 	    case 'N':
-	    	add(255);
+	    	leds(255);
 	    	cmd[0] = 'r';
+	    	cmd[1] = 255;
 	    	break;
-	    case cmd[0] == 'C':
-			add(cmd[0]);
+	    case 'C':
+			leds(cmd[1]);
 			cmd[0] = 'r';
 			break;
 	    case 'F':
-	    	add(0);
+	    	leds(0);
 	    	cmd[0] = 'r';
+	    	cmd[1] = 0;
 	    	break;
 	    case 'S':
 	    	leds_state();
+	    	cmd[0] = 'r';
 	    default:
 	    	break;
 	  }
