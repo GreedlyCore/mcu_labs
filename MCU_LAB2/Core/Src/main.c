@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -59,6 +59,7 @@ static void MX_USART2_UART_Init(void);
 // TODO: TYPE OF WORK --> 3
 
 uint8_t cmd[] = "00"; // cmd PING by default
+uint8_t state[] = {'0'};
 /*
  * AVAILABLE COMMANDS:
  * P:  PING -> "PING"
@@ -67,13 +68,13 @@ uint8_t cmd[] = "00"; // cmd PING by default
  * C: 0b11100011 -> turn on if "1", else turn off CUSTOM
  * S:  STATE -> "11100011" , "1" if led turned on ,else turned off
  * */
+
 void ping(){
-	HAL_UART_Transmit_IT(&huart2, (uint8_t *) cmd[0], 1);
+	HAL_UART_Transmit_IT(&huart2, (uint8_t *)&cmd[0], 1);
 }
 
 void leds_state(){
-	HAL_UART_Transmit_IT(&huart2, (uint8_t *) cmd[1], 1);
-
+	HAL_UART_Transmit_IT(&huart2, &state, 1);
 }
 
 //void add();
@@ -81,11 +82,12 @@ void leds_state(){
 
 
 void leds(uint8_t counter) {
-//	counter = (counter + 1) & 0xFF;
     GPIOC->BSRR = ((~counter << 4) & LED_PIN_MASK) << 16 | ((counter << 4) & LED_PIN_MASK);
-	HAL_UART_Transmit_IT(&huart2, (uint8_t *) cmd[0], 1);
+	HAL_UART_Transmit_IT(&huart2, (uint8_t *)&cmd[0], 1);
+	state[0] = counter;
 }
 
+bool cmd_executed = false;
 /* USER CODE END 0 */
 
 /**
@@ -120,37 +122,31 @@ int main(void)
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
   HAL_UART_Receive_IT(&huart2, cmd, 2);
-//  int x = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1) {
-//	  x++;
-	  switch (cmd[0]) {
-	    case 'P':
-	    	ping();
-	    	cmd[0] = 'r';
-	      break;
-	    case 'N':
-	    	leds(255);
-	    	cmd[0] = 'r';
-	    	cmd[1] = 255;
-	    	break;
-	    case 'C':
-			leds(cmd[1]);
-			cmd[0] = 'r';
-			break;
-	    case 'F':
-	    	leds(0);
-	    	cmd[0] = 'r';
-	    	cmd[1] = 0;
-	    	break;
-	    case 'S':
-	    	leds_state();
-	    	cmd[0] = 'r';
-	    default:
-	    	break;
+	  if (!cmd_executed){
+		  switch (cmd[0]) {
+			case 'P':
+				ping();
+			  break;
+			case 'N':
+				leds(255);
+				break;
+			case 'C':
+				leds(cmd[1]);
+				break;
+			case 'F':
+				leds(0);
+				break;
+			case 'S':
+				leds_state();
+			default:
+				break;
+		  }
+		  cmd_executed = true;
 	  }
 
 //	HAL_UART_Transmit_IT();
@@ -269,7 +265,8 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-	HAL_UART_Receive_IT(&huart2, cmd, 1);
+	HAL_UART_Receive_IT(&huart2, cmd, 2);
+	cmd_executed = false;
 }
 /* USER CODE END 4 */
 
