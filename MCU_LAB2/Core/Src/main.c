@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdbool.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -58,8 +59,11 @@ static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN 0 */
 // TODO: TYPE OF WORK --> 3
 
-uint8_t cmd[] = "00"; // cmd PING by default
-uint8_t state[] = {'0'};
+uint8_t cmd[32];
+uint8_t cmdIndex = 0;
+
+
+
 /*
  * AVAILABLE COMMANDS:
  * P:  PING -> "PING"
@@ -69,22 +73,45 @@ uint8_t state[] = {'0'};
  * S:  STATE -> "11100011" , "1" if led turned on ,else turned off
  * */
 
+uint8_t binToByte(uint8_t* binaryString) {
+    uint8_t result = 0;
+    for (int i = 0; i < 8; i++) {
+        if (binaryString[i] == '1') {
+            result |= (1 << (7 - i));
+        }
+    }
+    return result;
+}
+
+void byteToString(uint8_t byte, uint8_t* binaryString) {
+    for (int i = 0; i < 8; i++) {
+        binaryString[i] = (byte & (1 << (7 - i))) ? '1' : '0';
+    }
+    binaryString[8] = '\0';
+}
+
+
 void ping(){
 	HAL_UART_Transmit_IT(&huart2, (uint8_t *)&cmd[0], 1);
 }
 
 void leds_state(){
-	HAL_UART_Transmit_IT(&huart2, &state, 1);
+	uint8_t pins = GPIOC->IDR;
+	uint8_t buff[8];
+	byteToString(pins, buff);
+
+	HAL_UART_Transmit_IT(&huart2, buff, 8);
 }
 
 //void add();
 #define LED_PIN_MASK 0x0FF0 // 0000 1111 1111 0000
 
 
-void leds(uint8_t counter) {
-    GPIOC->BSRR = ((~counter << 4) & LED_PIN_MASK) << 16 | ((counter << 4) & LED_PIN_MASK);
-	HAL_UART_Transmit_IT(&huart2, (uint8_t *)&cmd[0], 1);
-	state[0] = counter;
+void leds(uint8_t* str) {
+	uint8_t data[] = "C";
+	uint8_t bin = binToByte(str);
+    GPIOC->BSRR = ((~bin << 4) & LED_PIN_MASK) << 16 | ((bin << 4) & LED_PIN_MASK);
+	HAL_UART_Transmit_IT(&huart2, data, 1);
 }
 
 bool cmd_executed = false;
@@ -121,7 +148,7 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UART_Receive_IT(&huart2, cmd, 2);
+  HAL_UART_Receive_IT(&huart2, cmd, 8);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -130,23 +157,27 @@ int main(void)
 	  if (!cmd_executed){
 		  switch (cmd[0]) {
 			case 'P':
-				ping();
+				ping(); cmd_executed = true;
 			  break;
 			case 'N':
-				leds(255);
-				break;
-			case 'C':
-				leds(cmd[1]);
+				uint8_t all[] = "11111111";
+				leds(all); cmd_executed = true;
 				break;
 			case 'F':
-				leds(0);
+				uint8_t noone[] = "00000000";
+				leds(noone); cmd_executed = true;
 				break;
 			case 'S':
-				leds_state();
+				leds_state(); cmd_executed = true;
+			case '1':
+				leds(cmd); cmd_executed = true;
+				break;
+			case '0':
+				leds(cmd); cmd_executed = true;
+				break;
 			default:
 				break;
 		  }
-		  cmd_executed = true;
 	  }
 
 //	HAL_UART_Transmit_IT();
@@ -265,9 +296,19 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-	HAL_UART_Receive_IT(&huart2, cmd, 2);
+
+//	huart2.pRxBuffPtr--;
+	HAL_UART_Receive_IT(&huart2, cmd, 8);
+//	huart2.pRxBuffPtr -= 1U;
+	HAL_UART_AbortReceive_IT(&huart2);
+//	uint8_t receivedByte;
+//	HAL_UART_Receive_IT(&huart2, &receivedByte, 1);
+//	    if (cmdIndex < sizeof(cmd) - 1) {
+//	        cmd[cmdIndex++] = receivedByte;
+//	    }
 	cmd_executed = false;
 }
+
 /* USER CODE END 4 */
 
 /**
