@@ -18,6 +18,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include <math.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -56,6 +57,19 @@ static void MX_GPIO_Init(void);
 static void MX_DAC_Init(void);
 static void MX_TIM6_Init(void);
 static void MX_USART2_UART_Init(void);
+
+float wave(uint16_t t) {
+	float v_ref = 3.3;
+	uint16_t f = 10;
+	float omega = 2 * M_PI * f;
+	float phi = -M_PI / 2;
+	float a = 0.5;
+	float b = 0.5;
+
+	float res = b + a * sinf(omega * t + phi);
+
+	return res * 4096 / v_ref;
+}
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -100,8 +114,6 @@ int main(void)
   MX_TIM6_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  uint32_t data = 1000;
-  uint32_t alignment = 1500;
 
   /*
    * COMMANDS FOR SETUP SIN via UART
@@ -113,9 +125,12 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  float dt = 0.01;
+  float t = 0;
   while (1)
   {
-	HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, alignment, data);
+	t += dt;
+	HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, wave(t));
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -301,10 +316,10 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
-	if (htim == &htim2){
-		if(htim->Instance == TIMx){
+	if (htim == &htim6){
+		if(htim->Instance == TIM1){
 //			HAL_UART_Receive_IT(huart, pData, Size)
-			HAL_UART_Transmit_IT()
+//			HAL_UART_Transmit_IT();
 		}
 	}
 }
