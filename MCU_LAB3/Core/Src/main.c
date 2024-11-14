@@ -67,10 +67,10 @@ static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN 0 */
 int num = 0;
 uint32_t time = 0;
+bool cmd_executed = false;
 
 char rx_buffer[10];
 char tx_buffer[50];
-bool cmd_executed = false;
 
 float received_numbers[2];
 int numbers_received = 0;
@@ -78,43 +78,24 @@ int numbers_received = 0;
 uint32_t w = 0;
 float omega = 1.0;
 
-uint32_t wave(uint32_t t);
 
 float phi = -3.14 / 2.0;
 float ampl = 1;
+float freq = 10.0; // in Hz, should be the same as timer clock
 
 uint32_t wave(uint32_t t) {
 	uint32_t ns = 10; // ns = number samples || ns = 10 - bad || ns = 255 - good
 	float v_ref = 3.3;
-	float freq = 240.0; // in Hz, should be the same as timer clock
 	// 1000000/freq . 16 bit, then PSC need incresde to -> another formula we need
-	// my method
-	TIM1->ARR = (uint32_t) (1000000/freq)+1;
+	TIM1->ARR = (uint32_t) (1000000/(ns*freq));
 	TIM1->PSC = 150 + 1;
+	TIM1->EGR = TIM_EGR_UG;
 
-	// stm method
-//	TIM1->ARR = (uint32_t) (1000000/(ns*freq));
-//	TIM1->PSC = 16 + 1;
 	omega = 2.0 * 3.14 * freq;
-	float b = 0.5;
-	float res = b + ampl * sinf( ((omega/ns) * t) + phi);
+	float b = 1;
+	float res = (1 +  sinf( omega * t) );
 
-	return (uint32_t) ((res / v_ref)* 4096);
-//	return (uint32_t) (v_ref/2) * ( ampl * sin( (6.28/ns)*t ) + 1 );
-
-
-//	// 12-битное DAC, максимальное значение - 0xFFF
-//	const uint32_t DAC_MaxDigitalValue = 0xFFF;
-//
-//	// Угол для текущего сэмпла с учётом фазового сдвига
-//	float angle = ((2.0f * 3.14159f * t) / ns) + phi;
-//
-//	// Генерация значения синуса и масштабирование в диапазон от 0 до DAC_MaxDigitalValue
-//	float sineValue = (uint32_t) (sinf(angle) + 1.0f);
-//
-//	// Преобразование в цифровое значение для DAC (с учётом VREF)
-//	return (uint32_t) ( 4096 * (sineValue / (3.3/2)) );
-
+	return (uint32_t) (res * ampl *(4095/(2*v_ref)));
 
 }
 
@@ -130,7 +111,7 @@ uint32_t wave(uint32_t t) {
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if (htim == &htim1){
 		if(htim->Instance == TIM1){
-			time++; // t is discrete
+			time++;
 			w = wave(time);
 			HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, w);
 
@@ -150,21 +131,40 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 //    if (huart->Instance == USART2 {
 
         float number;
+
+        if (!cmd_executed){
+        switch (numbers_received) {
+			case 0:
+				snprintf(tx_buffer, sizeof(tx_buffer), "Enter Amplitude\n");
+				HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
+				break;
+			case 1:
+				snprintf(tx_buffer, sizeof(tx_buffer), "Enter Phase\n");
+				HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
+			case 2:
+				snprintf(tx_buffer, sizeof(tx_buffer), "got numbers, plotting a sin\n");
+				HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
+				numbers_received = 0;
+				break;
+			default:
+				break;
+		}
+        cmd_executed = true;
+		}
+
+        HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer) - 1);
+
         if (sscanf(rx_buffer, "%f", &number) == 1) {
             received_numbers[numbers_received] = number;
+            if (numbers_received == 0) ampl = received_numbers[numbers_received];
+            if (numbers_received == 1) freq = received_numbers[numbers_received];
             numbers_received++;
         }
-
-        if (numbers_received == 2) {
-            snprintf(tx_buffer, sizeof(tx_buffer), "got numbers, plotting a sin\n");
-            HAL_UART_Transmit(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer), HAL_MAX_DELAY);
-
-            numbers_received = 0;
-        }
-
-        memset(rx_buffer, 0, sizeof(rx_buffer));
-        HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer) - 1);
+  memset(rx_buffer, 0, sizeof(rx_buffer));
 }
+
+
+
 
 
 
@@ -211,10 +211,7 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim1);
   HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
 
-
-  int x = 0;
   HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer) - 1);
-
   /*
    * COMMANDS FOR SETUP SIN via UART
    * AMPL FREQ
@@ -229,8 +226,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-//	HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, alignment, data);
-	  x++;
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
