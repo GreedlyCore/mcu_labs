@@ -66,10 +66,11 @@ static void MX_USART2_UART_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 int num = 0;
-uint32_t time = 0;
+float time = 0;
+float dt = 1.0 / 2000.0;
 bool cmd_executed = false;
 
-char rx_buffer[10];
+char rx_buffer[5];
 char tx_buffer[50];
 
 float received_numbers[2];
@@ -81,21 +82,21 @@ float omega = 1.0;
 
 float phi = -3.14 / 2.0;
 float ampl = 1;
-float freq = 10.0; // in Hz, should be the same as timer clock
+float freq = 60.0; // in Hz, should be the same as timer clock
 
-uint32_t wave(uint32_t t) {
-	uint32_t ns = 10; // ns = number samples || ns = 10 - bad || ns = 255 - good
+uint32_t wave(float t) {
+//	uint32_t ns = 10; // ns = number samples || ns = 10 - bad || ns = 255 - good
 	float v_ref = 3.3;
 	// 1000000/freq . 16 bit, then PSC need incresde to -> another formula we need
-	TIM1->ARR = (uint32_t) (1000000/(ns*freq));
-	TIM1->PSC = 150 + 1;
-	TIM1->EGR = TIM_EGR_UG;
+//	TIM1->ARR = (uint32_t) (1000000/(ns*freq));
+//	TIM1->PSC = 150 + 1;
+//	TIM1->EGR = TIM_EGR_UG;
 
 	omega = 2.0 * 3.14 * freq;
-	float b = 1;
-	float res = (1 +  sinf( omega * t) );
+//	float b = 1;
+	float res = (1 +  sinf( omega * t) ) / 2;
 
-	return (uint32_t) (res * ampl *(4095/(2*v_ref)));
+	return (uint32_t) (res * ampl *(4095/(v_ref)));
 
 }
 
@@ -111,16 +112,9 @@ uint32_t wave(uint32_t t) {
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if (htim == &htim1){
 		if(htim->Instance == TIM1){
-			time++;
+			time += dt;
 			w = wave(time);
 			HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, w);
-
-
-//			uint8_t buff[10];
-//			num++;
-//			sprintf(buff, "%d", num);
-
-//			HAL_UART_Transmit_IT(&huart2, buff, 10);
 			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 
 		}
@@ -128,40 +122,45 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-//    if (huart->Instance == USART2 {
 
         float number;
 
-        if (!cmd_executed){
-        switch (numbers_received) {
-			case 0:
-				snprintf(tx_buffer, sizeof(tx_buffer), "Enter Amplitude\n");
-				HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
-				break;
-			case 1:
-				snprintf(tx_buffer, sizeof(tx_buffer), "Enter Phase\n");
-				HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
-			case 2:
-				snprintf(tx_buffer, sizeof(tx_buffer), "got numbers, plotting a sin\n");
-				HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
-				numbers_received = 0;
-				break;
-			default:
-				break;
-		}
-        cmd_executed = true;
-		}
+//        if (!cmd_executed){
+//        switch (numbers_received) {
+//			case 0:
+//				snprintf(tx_buffer, sizeof(tx_buffer), "Enter Amplitude\n");
+//				HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
+//				break;
+//			case 1:
+//				snprintf(tx_buffer, sizeof(tx_buffer), "Enter Phase\n");
+//				HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
+//			case 2:
+//				snprintf(tx_buffer, sizeof(tx_buffer), "got numbers, plotting a sin\n");
+//				HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
+//				numbers_received = 0;
+//				break;
+//			default:
+//				break;
+//		}
+//        cmd_executed = true;
+//		}
 
         HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer) - 1);
 
         if (sscanf(rx_buffer, "%f", &number) == 1) {
-            received_numbers[numbers_received] = number;
-            if (numbers_received == 0) ampl = received_numbers[numbers_received];
-            if (numbers_received == 1) freq = received_numbers[numbers_received];
-            numbers_received++;
+
+        	 if (numbers_received == 0) {
+        	            	ampl = number;
+        	            	numbers_received++;
+        	            }
+        	 else if(numbers_received == 1) {
+        	            	freq = number;
+        	            	numbers_received = 0;
+        	            }
         }
-  memset(rx_buffer, 0, sizeof(rx_buffer));
-}
+        memset(rx_buffer, 0, sizeof(rx_buffer));
+  }
+
 
 
 
@@ -220,6 +219,8 @@ int main(void)
    * FLOAT -> .2f
    * */
 //  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer) - 1);
+  snprintf(tx_buffer, sizeof(tx_buffer), "Enter Amplitude\n");
+  HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -338,9 +339,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 80-1;
+  htim1.Init.Prescaler = 150+1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 1000-1;
+  htim1.Init.Period = 500+1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;

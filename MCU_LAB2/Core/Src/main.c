@@ -302,9 +302,14 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
+//
+//if Size ==
+//}
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 
-//	huart2.pRxBuffPtr--;
 //	HAL_UART_Receive_IT(&huart2, cmd, 8);
 //	huart2.pRxBuffPtr -= 1U;
 //	HAL_UART_AbortReceive_IT(&huart2);
@@ -316,6 +321,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	memcpy(RxData+indx, temp, 1);
 	if (++indx >= 8) indx = 0;
 	HAL_UART_Receive_IT(&huart2, temp, 1);
+
+	HAL_UART_Reve
 
 	cmd_executed = false;
 }
