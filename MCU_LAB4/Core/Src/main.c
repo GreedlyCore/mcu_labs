@@ -43,6 +43,9 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
+
 DAC_HandleTypeDef hdac;
 
 TIM_HandleTypeDef htim1;
@@ -56,21 +59,22 @@ UART_HandleTypeDef huart2;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_DAC_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-//per second we need points*freq interrupts --> Hz
 
 int num = 0;
 float time = 0;
 uint32_t ns = 4000;
-float dt = 1.0 / 4000.0; // 4000 points
+float dt = 1.0 / 4000.0; // 4000 points per second - sample rate
 
 bool cmd_executed = false;
 
@@ -86,17 +90,13 @@ float omega = 1.0;
 
 float phi = -3.14 / 2.0;
 float ampl = 1;
-float freq = 10.0; // in Hz, should be the same as timer clock
-
-// ns = number samples || ns = 10 - bad || ns = 255 - good
-// dont use, dt + timer freq need to down
+float freq = 10.0;
 
 uint32_t wave(float t) {
 	float v_ref = 3.3;
 	omega = 2.0 * 3.14 * freq;
 	float res = (1 +  sinf( omega * t) ) / 2;
 	return (uint32_t) (res * ampl *(4095/(v_ref)));
-//	TIM1->ARR =
 }
 
 /* USER CODE END 0 */
@@ -109,8 +109,6 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
-
 
   /* USER CODE END 1 */
 
@@ -132,29 +130,27 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_DAC_Init();
   MX_TIM1_Init();
   MX_USART2_UART_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 
-
-//  HAL_TIM_Base_Start_IT(&htim6);
   HAL_TIM_Base_Start_IT(&htim1);
   HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
-
-
+  uint32_t adc_data[500];
+  uint32_t length = 1000;
+  HAL_ADC_Start_DMA(&hadc1, adc_data, length);
   HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10);
 
-  /*
-   * COMMANDS FOR SETUP SIN via UART
-   * AMPL FREQ
-   * 2.5_5.2
-   * FLOAT-SPACE-FLOAT
-   * FLOAT -> .2f
-   * */
-//  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer) - 1);
-//  snprintf(tx_buffer, sizeof(tx_buffer), "Enter Amplitude\n");
-//  HAL_UART_Transmit_IT(&huart2, (uint8_t*)tx_buffer, strlen(tx_buffer));
+  uint16_t freq = 1000;
+  uint32_t APB2_freq = HAL_RCC_GetPCLK2Freq()*2;
+  TIM1->PSC = (uint32_t) ( APB2_freq/ 1000000 ) - 1;
+  TIM1->ARR = (uint32_t) (1000000/ (freq)) - 1 ;
+
+
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -185,12 +181,13 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 6;
-  RCC_OscInitStruct.PLL.PLLN = 250;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLN = 150;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -212,6 +209,58 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
+  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ContinuousConvMode = DISABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = 1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -273,9 +322,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 150-1;
+  htim1.Init.Prescaler = 175-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 250 - 1;
+  htim1.Init.Period = 250+1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -316,7 +365,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 38400;
+  huart2.Init.BaudRate = 1000000;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -334,6 +383,22 @@ static void MX_USART2_UART_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA2_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA2_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -346,8 +411,9 @@ static void MX_GPIO_Init(void)
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
@@ -364,9 +430,20 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if (htim == &htim1){
-		if(htim->Instance == TIM1){
+		if(htim->Instance == TIM2){
+			time += dt;
+			w = wave(time);
+			HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, w);
+			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+		}
+	}
+
+	if (htim == &htim2){
+		if(htim->Instance == TIM2){
 			time += dt;
 			w = wave(time);
 			HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, w);
@@ -378,6 +455,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 	int number;
+
     if ( sscanf(rx_buffer, "%d", &number) == 1) {
     	 float number2 = number / 100.0f;
     	 if (numbers_received == 0) {
@@ -387,38 +465,13 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
     	 else if(numbers_received == 1) {
     	            	freq = number2;
     	            	numbers_received = 0;
-
-    	            	uint32_t APB2_freq = HAL_RCC_GetPCLK2Freq()*2;
-
-    	            	// не вывозит?
-    	            	__HAL_TIM_SET_AUTORELOAD(&htim1, (uint32_t)  ( 1000000 / (freq*ns)  - 1 ) );
-    	            	__HAL_TIM_SET_PRESCALER(&htim1, (uint32_t) ( APB2_freq/ 1000000 ) - 1);
-//    	            	TIM1->PSC = (uint32_t) ( APB2_freq/ 1000000 ) - 1;
-//    	            	TIM1->ARR = (uint32_t) (1000000/ (freq*ns)) - 1 ;
-
     	            }
-
     }
 
     HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10);
     memset(rx_buffer, 0, sizeof(rx_buffer));
 }
-//void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-//		int number;
-//        if ( sscanf(rx_buffer, "%d", &number) == 1) {
-//        	 float number2 = number / 100.0f;
-//        	 if (numbers_received == 0) {
-//        	            	ampl = number2;
-//        	            	numbers_received++;
-//        	            }
-//        	 else if(numbers_received == 1) {
-//        	            	freq = number2;
-//        	            	numbers_received = 0;
-//        	            }
-//        }
-//        HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, sizeof(rx_buffer) - 1);
-////        memset(rx_buffer, 0, sizeof(rx_buffer));
-//  }
+
 /* USER CODE END 4 */
 
 /**
