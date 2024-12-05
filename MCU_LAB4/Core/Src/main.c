@@ -94,63 +94,6 @@ void sendFloatToSimulink(float value) {
     memset(buffer, 0, sizeof(buffer));
 }
 
-//typedef union {
-//    float number;
-//    uint8_t bytes[4];
-//} FLOAT_UNION;
-
-
-//void sendFloatToSimulink(float value) {
-//	FLOAT_UNION float_struct;
-//    uint8_t buffer[4]; // 'S' + 4 bytes for float + 'E'
-//    float_struct.number = value;
-//
-////    buffer[0] = 'S';
-//    for (int i = 0; i < 4; i++) {
-//        buffer[i ] = float_struct.bytes[i]; /// +1
-//    }
-////    buffer[5] = 'E';
-//
-//    HAL_UART_Transmit_IT(&huart2, buffer, sizeof(buffer));
-//}
-
-//typedef struct {
-//    uint8_t header;
-//    uint32_t number; //ex: float
-//    uint8_t terminator;
-//} message;
-//
-//message msg;
-//
-//// https://www.mathworks.com/help/mcb/ref/hostserialreceive.html
-//void sendFloatToSimulink(uint32_t value) {
-//	msg.header = 'S';
-//	msg.number = value;
-//	msg.terminator = 'E';
-//
-//    uint8_t buffer[sizeof(msg)]; // buffer is long enough
-//    memcpy(buffer, &msg, sizeof(msg));
-//
-//    HAL_UART_Transmit_IT(&huart2, buffer, sizeof(buffer));
-//    memset(buffer, 0, sizeof(buffer));
-//}
-
-
-//void sendFloatToSimulink(float value) {
-//	msg.header = 'S';
-////	msg.flood = "abcdeabcde";
-//	msg.number = value;
-//	msg.terminator = 'E';
-//
-//    uint8_t buffer[sizeof(msg)]; // buffer is long enough
-//    memcpy(buffer, &msg, sizeof(msg));
-//
-//    HAL_UART_Transmit_IT(&huart2, buffer, sizeof(buffer));
-//    memset(buffer, 0, sizeof(buffer));
-//}
-
-
-
 int num = 0;
 float time = 0;
 uint32_t ns = 4000;
@@ -226,7 +169,8 @@ int main(void)
 //  uint32_t length = 1000;
 //  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
   HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1);
-  HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10);
+  HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, 3);
+  //  HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10);
 
   uint16_t freq = 1000;
   uint32_t APB2_freq = HAL_RCC_GetPCLK2Freq()*2;
@@ -573,35 +517,56 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if (htim == &htim2){
 		if(htim->Instance == TIM2){
 
-//			((value_adc * 3.3)/4096)
+			HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1);
 			sendFloatToSimulink( value_adc );
-
 		}
 	}
 }
 
-void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
-  HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+//void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+//  HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+//}
+
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+
+  if(huart == &huart2) {
+	  	int number;
+	      if ( sscanf(rx_buffer, "%d", &number) == 1) {
+	      	 float number2 = number / 100.0f;
+	      	 if (numbers_received == 0) {
+	      	            	ampl = number2;
+	      	            	numbers_received++;
+	      	            	HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, 4);
+	      	            }
+	      	 else if(numbers_received == 1) {
+	      	            	freq = number2;
+	      	            	numbers_received = 0;
+	      	            	HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, 3);
+	      	            }
+	      }
+
+	      memset(rx_buffer, 0, sizeof(rx_buffer));
+
+  }
 }
 
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
-	int number;
-    if ( sscanf(rx_buffer, "%d", &number) == 1) {
-    	 float number2 = number / 100.0f;
-    	 if (numbers_received == 0) {
-    	            	ampl = number2;
-    	            	numbers_received++;
-    	            }
-    	 else if(numbers_received == 1) {
-    	            	freq = number2;
-    	            	numbers_received = 0;
-    	            }
-
-    }
-
-    HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10);
-    memset(rx_buffer, 0, sizeof(rx_buffer));
-}
+//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
+//	int number;
+//    if ( sscanf(rx_buffer, "%d", &number) == 1) {
+//    	 float number2 = number / 100.0f;
+//    	 if (numbers_received == 0) {
+//    	            	ampl = number2;
+//    	            	numbers_received++;
+//    	            }
+//    	 else if(numbers_received == 1) {
+//    	            	freq = number2;
+//    	            	numbers_received = 0;
+//    	            }
+//    }
+//    HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10);
+//    memset(rx_buffer, 0, sizeof(rx_buffer));
+//}
 
 /* USER CODE END 4 */
 
