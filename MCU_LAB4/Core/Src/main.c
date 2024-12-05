@@ -49,6 +49,7 @@ DMA_HandleTypeDef hdma_adc1;
 DAC_HandleTypeDef hdac;
 
 TIM_HandleTypeDef htim1;
+TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart2;
 
@@ -64,12 +65,91 @@ static void MX_DAC_Init(void);
 static void MX_TIM1_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_ADC1_Init(void);
+static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+#define message_header 0xABCD
+#define message_terminator 0xBEDA
+
+typedef struct {
+    uint16_t header;
+    uint16_t number; //ex: float
+    uint16_t terminator;
+} message;
+
+message msg;
+
+void sendFloatToSimulink(float value) {
+	msg.header = message_header;
+	msg.number = value;
+	msg.terminator = message_terminator;
+    uint8_t buffer[sizeof(msg)]; // buffer is long enough
+    memcpy(buffer, &msg, sizeof(msg));
+    HAL_UART_Transmit_IT(&huart2, (uint8_t*)&msg, sizeof(msg)); // send message
+    memset(buffer, 0, sizeof(buffer));
+}
+
+//typedef union {
+//    float number;
+//    uint8_t bytes[4];
+//} FLOAT_UNION;
+
+
+//void sendFloatToSimulink(float value) {
+//	FLOAT_UNION float_struct;
+//    uint8_t buffer[4]; // 'S' + 4 bytes for float + 'E'
+//    float_struct.number = value;
+//
+////    buffer[0] = 'S';
+//    for (int i = 0; i < 4; i++) {
+//        buffer[i ] = float_struct.bytes[i]; /// +1
+//    }
+////    buffer[5] = 'E';
+//
+//    HAL_UART_Transmit_IT(&huart2, buffer, sizeof(buffer));
+//}
+
+//typedef struct {
+//    uint8_t header;
+//    uint32_t number; //ex: float
+//    uint8_t terminator;
+//} message;
+//
+//message msg;
+//
+//// https://www.mathworks.com/help/mcb/ref/hostserialreceive.html
+//void sendFloatToSimulink(uint32_t value) {
+//	msg.header = 'S';
+//	msg.number = value;
+//	msg.terminator = 'E';
+//
+//    uint8_t buffer[sizeof(msg)]; // buffer is long enough
+//    memcpy(buffer, &msg, sizeof(msg));
+//
+//    HAL_UART_Transmit_IT(&huart2, buffer, sizeof(buffer));
+//    memset(buffer, 0, sizeof(buffer));
+//}
+
+
+//void sendFloatToSimulink(float value) {
+//	msg.header = 'S';
+////	msg.flood = "abcdeabcde";
+//	msg.number = value;
+//	msg.terminator = 'E';
+//
+//    uint8_t buffer[sizeof(msg)]; // buffer is long enough
+//    memcpy(buffer, &msg, sizeof(msg));
+//
+//    HAL_UART_Transmit_IT(&huart2, buffer, sizeof(buffer));
+//    memset(buffer, 0, sizeof(buffer));
+//}
+
+
 
 int num = 0;
 float time = 0;
@@ -89,8 +169,8 @@ float omega = 1.0;
 
 
 float phi = -3.14 / 2.0;
-float ampl = 1;
-float freq = 10.0;
+float ampl = 2;
+float freq = 5.0;
 
 uint32_t wave(float t) {
 	float v_ref = 3.3;
@@ -98,6 +178,8 @@ uint32_t wave(float t) {
 	float res = (1 +  sinf( omega * t) ) / 2;
 	return (uint32_t) (res * ampl *(4095/(v_ref)));
 }
+
+uint32_t value_adc = 0;
 
 /* USER CODE END 0 */
 
@@ -135,13 +217,15 @@ int main(void)
   MX_TIM1_Init();
   MX_USART2_UART_Init();
   MX_ADC1_Init();
+  MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_TIM_Base_Start_IT(&htim1);
+  HAL_TIM_Base_Start_IT(&htim2);
   HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
-  uint32_t adc_data[500];
-  uint32_t length = 1000;
-  HAL_ADC_Start_DMA(&hadc1, adc_data, length);
+//  uint32_t length = 1000;
+//  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1);
   HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10);
 
   uint16_t freq = 1000;
@@ -149,7 +233,8 @@ int main(void)
   TIM1->PSC = (uint32_t) ( APB2_freq/ 1000000 ) - 1;
   TIM1->ARR = (uint32_t) (1000000/ (freq)) - 1 ;
 
-
+//  TIM2->PSC = (uint32_t) 75 - 1;//( APB2_freq/ 1000000 ) - 1;
+//  TIM2->ARR = (uint32_t) (1000) - 1 ;
 
   /* USER CODE END 2 */
 
@@ -181,12 +266,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 5;
   RCC_OscInitStruct.PLL.PLLN = 150;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
@@ -241,7 +325,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
+  hadc1.Init.DMAContinuousRequests = ENABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
@@ -250,7 +334,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
   */
-  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Channel = ADC_CHANNEL_12;
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
@@ -350,6 +434,51 @@ static void MX_TIM1_Init(void)
 }
 
 /**
+  * @brief TIM2 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM2_Init(void)
+{
+
+  /* USER CODE BEGIN TIM2_Init 0 */
+
+  /* USER CODE END TIM2_Init 0 */
+
+  TIM_ClockConfigTypeDef sClockSourceConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM2_Init 1 */
+
+  /* USER CODE END TIM2_Init 1 */
+  htim2.Instance = TIM2;
+  htim2.Init.Prescaler = 75-1;
+  htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim2.Init.Period = 1000-1;
+  htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim2.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  if (HAL_TIM_Base_Init(&htim2) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim2, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM2_Init 2 */
+
+  /* USER CODE END TIM2_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -365,7 +494,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 1000000;
+  huart2.Init.BaudRate = 900000;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -413,17 +542,16 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, LED2_Pin|LED_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : LED_Pin */
-  GPIO_InitStruct.Pin = LED_Pin;
+  /*Configure GPIO pins : LED2_Pin LED_Pin */
+  GPIO_InitStruct.Pin = LED2_Pin|LED_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
@@ -433,7 +561,7 @@ static void MX_GPIO_Init(void)
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if (htim == &htim1){
-		if(htim->Instance == TIM2){
+		if(htim->Instance == TIM1){
 			time += dt;
 			w = wave(time);
 			HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, w);
@@ -444,18 +572,20 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 	if (htim == &htim2){
 		if(htim->Instance == TIM2){
-			time += dt;
-			w = wave(time);
-			HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, w);
-			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+//			((value_adc * 3.3)/4096)
+			sendFloatToSimulink( value_adc );
 
 		}
 	}
 }
 
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
+  HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+}
+
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 	int number;
-
     if ( sscanf(rx_buffer, "%d", &number) == 1) {
     	 float number2 = number / 100.0f;
     	 if (numbers_received == 0) {
@@ -466,6 +596,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
     	            	freq = number2;
     	            	numbers_received = 0;
     	            }
+
     }
 
     HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10);

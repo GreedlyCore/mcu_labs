@@ -391,8 +391,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
     	            	uint32_t APB2_freq = HAL_RCC_GetPCLK2Freq()*2;
 
     	            	// не вывозит?
-    	            	__HAL_TIM_SET_AUTORELOAD(&htim1, (uint32_t)  ( 1000000 / (freq*ns)  - 1 ) );
-    	            	__HAL_TIM_SET_PRESCALER(&htim1, (uint32_t) ( APB2_freq/ 1000000 ) - 1);
+//    	            	__HAL_TIM_SET_AUTORELOAD(&htim1, (uint32_t)  ( 1000000 / (freq*ns)  - 1 ) );
+//    	            	__HAL_TIM_SET_PRESCALER(&htim1, (uint32_t) ( APB2_freq/ 1000000 ) - 1);
 //    	            	TIM1->PSC = (uint32_t) ( APB2_freq/ 1000000 ) - 1;
 //    	            	TIM1->ARR = (uint32_t) (1000000/ (freq*ns)) - 1 ;
 
