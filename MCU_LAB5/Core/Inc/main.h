@@ -63,6 +63,8 @@ void Error_Handler(void);
 #define ADC1_SERVO_GPIO_Port GPIOC
 #define ADC1_POT_Pin GPIO_PIN_0
 #define ADC1_POT_GPIO_Port GPIOB
+#define LED2_Pin GPIO_PIN_6
+#define LED2_GPIO_Port GPIOC
 #define LED_Pin GPIO_PIN_9
 #define LED_GPIO_Port GPIOC
 #define DIR2_Pin GPIO_PIN_8
