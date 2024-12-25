@@ -136,7 +136,7 @@ void set_datetime (uint8_t hours, uint8_t minutes, uint8_t month, uint8_t day)
 }
 
 
-void get_datetime(char *time, char *date)
+void get_datetime()
 {
    uint8_t time_buffer[2]; uint8_t date_buffer[2];
    // Minutes-Hours
@@ -175,8 +175,27 @@ void get_datetime(char *time, char *date)
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+void ConvertToDisplayData() {
+    uint8_t values[4] = {
+        sDateTime.Hours,
+        sDateTime.Minutes,
+        sDateTime.Day,
+        sDateTime.Month
+    };
+
+    for (uint8_t i = 0; i < 4; i++) {
+        uint8_t tens = (values[i] >> 4);
+        uint8_t units = (values[i] & 0x0F);
+
+
+        display_data[i * 2] = segment_map[tens];
+        display_data[i * 2 + 1] = segment_map[units];
+    }
+}
 
 void update_display(void) {
+
+	ConvertToDisplayData();
     spi_tx_buffer[1] = ~(1 << current_digit);
     spi_tx_buffer[0] = display_data[current_digit];
 
@@ -200,6 +219,7 @@ void parse_uart(const char *input) {
             sDateTime.Month = RTC_ByteToBcd2(month);
             sDateTime.Day = RTC_ByteToBcd2(day);
         }
+
 }
 
 /* USER CODE END 0 */
@@ -260,6 +280,7 @@ int main(void)
   while (1)
   {
 	  HAL_UART_Receive_DMA(&huart2, uart_rx_buffer, sizeof(uart_rx_buffer));
+	  get_datetime();
 	  update_display(); // dynamically
     /* USER CODE END WHILE */
 

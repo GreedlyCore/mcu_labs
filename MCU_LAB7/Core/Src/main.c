@@ -21,7 +21,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <ctype.h>
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -62,6 +63,8 @@ const uint8_t segment_map[10] = {
 };
 
 
+
+
 // data to be displayed on two 2481AS
 uint8_t display_data[8] = {0x86, 0xdb, 0xcf, 0xe6, 0x87,  0x87, 0x87, 0xff};
 uint8_t spi_tx_buffer[2];
@@ -83,8 +86,9 @@ static void MX_USART2_UART_Init(void);
 /* USER CODE BEGIN 0 */
 
 void update_display(void) {
-    spi_tx_buffer[1] = ~(1 << current_digit);
-    spi_tx_buffer[0] = display_data[current_digit];
+	spi_tx_buffer[0] = display_data[current_digit];
+	spi_tx_buffer[1] = ~(1 << current_digit);
+
 
     HAL_GPIO_WritePin(SS_GPIO_Port, SS_Pin, GPIO_PIN_RESET);
     HAL_SPI_Transmit_DMA(&hspi2, spi_tx_buffer, sizeof(spi_tx_buffer));
@@ -159,7 +163,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  HAL_UART_Receive_DMA(&huart2, uart_rx_buffer, sizeof(uart_rx_buffer));
+//	  HAL_UART_Receive_DMA(&huart2, uart_rx_buffer, sizeof(uart_rx_buffer));
 	  update_display(); // dynamically
 //	  HAL_Delay(10);
     /* USER CODE END WHILE */
@@ -181,7 +185,7 @@ void SystemClock_Config(void)
   /** Configure the main internal regulator output voltage
   */
   __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -190,8 +194,8 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 9;
-  RCC_OscInitStruct.PLL.PLLN = 150;
+  RCC_OscInitStruct.PLL.PLLM = 6;
+  RCC_OscInitStruct.PLL.PLLN = 90;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
   RCC_OscInitStruct.PLL.PLLR = 2;
@@ -206,10 +210,10 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
