@@ -182,7 +182,7 @@ int main(void)
 	  control = kp*error + ki*integral; // + ki*integral + kd*diff;
 	  if ( fabs(error) >= 40.0 ){
 	////	   set Duty Cycle: 1000 <--> 100%  ; 905 <-> 90.5%
-		  HAL_GPIO_WritePin(DIR2_GPIO_Port, DIR2_Pin, get_sign(error)); // set direction of the servo
+		  HAL_GPIO_WritePin(DIR2_GPIO_Port, DIR2_Pin, get_sign(-error)); // set direction of the servo
 
 		  // MAX Error: 270 (obviously)
 		  DUTY_CYCLE = (uint32_t) (control > 0) ? control : -control;
@@ -247,7 +247,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
@@ -333,7 +333,7 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 90-1;
+  htim1.Init.Prescaler = 60-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim1.Init.Period = 400-1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -380,7 +380,7 @@ static void MX_TIM2_Init(void)
 
   /* USER CODE END TIM2_Init 1 */
   htim2.Instance = TIM2;
-  htim2.Init.Prescaler = 90-1;
+  htim2.Init.Prescaler = 60-1;
   htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim2.Init.Period = 1000-1;
   htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;

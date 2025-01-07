@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Module name="soft_spi" Register="117" Alu="50" Lut="107" T_Register="537(117)" T_Alu="73(50)" T_Lut="501(107)" T_Bsram="7(0)">
+ <SubModule name="my_rpll"/>
+ <SubModule name="blinking_led" Register="26" Alu="23" Lut="9" T_Register="26(26)" T_Alu="23(23)" T_Lut="9(9)"/>
+ <SubModule name="bcd_converter" Register="71" Lut="103" T_Register="71(71)" T_Lut="103(103)"/>
+ <SubModule name="gw_gao_inst_0" Register="323" Lut="282" Bsram="7" T_Register="323(323)" T_Lut="282(282)" T_Bsram="7(7)"/>
+</Module>

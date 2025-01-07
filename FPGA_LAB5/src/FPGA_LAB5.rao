@@ -1,0 +1,91 @@
+<?xml version="1" encoding="UTF-8"?>
+<GAO_CONFIG>
+    <Version>3.0</Version>
+    <Mode>Lite</Mode>
+    <AoCore_Lite index="0" sample_clock="clk" trig_type="0" capture_amount="2048" implemention="0" input_register_enabled="0" capture_init_data_enabled="0" module_name="soft_spi">
+        <SignalList>
+            <Signal capture_enable="true">data</Signal>
+            <Signal capture_enable="true">ss</Signal>
+            <Bus capture_enable="true" name="d[4:0]">
+                <Signal>d[4]</Signal>
+                <Signal>d[3]</Signal>
+                <Signal>d[2]</Signal>
+                <Signal>d[1]</Signal>
+                <Signal>d[0]</Signal>
+            </Bus>
+            <Signal capture_enable="true">clkoutd</Signal>
+            <Bus capture_enable="true" name="bit_index[4:0]">
+                <Signal>bit_index[4]</Signal>
+                <Signal>bit_index[3]</Signal>
+                <Signal>bit_index[2]</Signal>
+                <Signal>bit_index[1]</Signal>
+                <Signal>bit_index[0]</Signal>
+            </Bus>
+            <Bus capture_enable="true" name="showing_number[31:0]">
+                <Signal>showing_number[31]</Signal>
+                <Signal>showing_number[30]</Signal>
+                <Signal>showing_number[29]</Signal>
+                <Signal>showing_number[28]</Signal>
+                <Signal>showing_number[27]</Signal>
+                <Signal>showing_number[26]</Signal>
+                <Signal>showing_number[25]</Signal>
+                <Signal>showing_number[24]</Signal>
+                <Signal>showing_number[23]</Signal>
+                <Signal>showing_number[22]</Signal>
+                <Signal>showing_number[21]</Signal>
+                <Signal>showing_number[20]</Signal>
+                <Signal>showing_number[19]</Signal>
+                <Signal>showing_number[18]</Signal>
+                <Signal>showing_number[17]</Signal>
+                <Signal>showing_number[16]</Signal>
+                <Signal>showing_number[15]</Signal>
+                <Signal>showing_number[14]</Signal>
+                <Signal>showing_number[13]</Signal>
+                <Signal>showing_number[12]</Signal>
+                <Signal>showing_number[11]</Signal>
+                <Signal>showing_number[10]</Signal>
+                <Signal>showing_number[9]</Signal>
+                <Signal>showing_number[8]</Signal>
+                <Signal>showing_number[7]</Signal>
+                <Signal>showing_number[6]</Signal>
+                <Signal>showing_number[5]</Signal>
+                <Signal>showing_number[4]</Signal>
+                <Signal>showing_number[3]</Signal>
+                <Signal>showing_number[2]</Signal>
+                <Signal>showing_number[1]</Signal>
+                <Signal>showing_number[0]</Signal>
+            </Bus>
+            <Bus capture_enable="true" name="count_sec[15:0]">
+                <Signal>count_sec[15]</Signal>
+                <Signal>count_sec[14]</Signal>
+                <Signal>count_sec[13]</Signal>
+                <Signal>count_sec[12]</Signal>
+                <Signal>count_sec[11]</Signal>
+                <Signal>count_sec[10]</Signal>
+                <Signal>count_sec[9]</Signal>
+                <Signal>count_sec[8]</Signal>
+                <Signal>count_sec[7]</Signal>
+                <Signal>count_sec[6]</Signal>
+                <Signal>count_sec[5]</Signal>
+                <Signal>count_sec[4]</Signal>
+                <Signal>count_sec[3]</Signal>
+                <Signal>count_sec[2]</Signal>
+                <Signal>count_sec[1]</Signal>
+                <Signal>count_sec[0]</Signal>
+            </Bus>
+            <Bus capture_enable="true" name="bcd0[3:0]">
+                <Signal>bcd0[3]</Signal>
+                <Signal>bcd0[2]</Signal>
+                <Signal>bcd0[1]</Signal>
+                <Signal>bcd0[0]</Signal>
+            </Bus>
+            <Bus capture_enable="true" name="bcd1[3:0]">
+                <Signal>bcd1[3]</Signal>
+                <Signal>bcd1[2]</Signal>
+                <Signal>bcd1[1]</Signal>
+                <Signal>bcd1[0]</Signal>
+            </Bus>
+        </SignalList>
+    </AoCore_Lite>
+    <GAO_ID>1011100110001010</GAO_ID>
+</GAO_CONFIG>

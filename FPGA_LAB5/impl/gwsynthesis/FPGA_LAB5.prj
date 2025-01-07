@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE gowin-synthesis-project>
+<Project>
+    <Version>beta</Version>
+    <Device id="GW2A-18C" package="PBGA256" speed="8" partNumber="GW2A-LV18PG256C8/I7"/>
+    <FileList>
+        <File path="D:\embedded\projects_fpga\FPGA_LAB5\src\bin2bcd.v" type="verilog"/>
+        <File path="D:\embedded\projects_fpga\FPGA_LAB5\src\gowin_rpll\gowin_rpll.v" type="verilog"/>
+        <File path="D:\embedded\projects_fpga\FPGA_LAB5\src\led.v" type="verilog"/>
+        <File path="D:\embedded\projects_fpga\FPGA_LAB5\src\soft_spi.v" type="verilog"/>
+        <File path="D:\Gowin\Gowin_V1.9.10.03_x64\IDE\data\ipcores\GAO_LITE\GW_AO_0\gw_ao_mem_ctrl.v" type="gao"/>
+        <File path="D:\Gowin\Gowin_V1.9.10.03_x64\IDE\data\ipcores\GAO_LITE\GW_AO_0\gw_ao_top.v" type="gao"/>
+        <File path="D:\Gowin\Gowin_V1.9.10.03_x64\IDE\data\ipcores\GAO_LITE\GW_CON\gw_con_top.v" type="gao"/>
+        <File path="D:\Gowin\Gowin_V1.9.10.03_x64\IDE\data\ipcores\gw_jtag.v" type="gao"/>
+        <File path="D:\embedded\projects_fpga\FPGA_LAB5\impl\gwsynthesis\RTL_GAO\gw_gao_top.v" type="gao"/>
+    </FileList>
+    <OptionList>
+        <Option type="disable_insert_pad" value="0"/>
+        <Option type="global_freq" value="100.000"/>
+        <Option type="include_path" value="D:/Gowin/Gowin_V1.9.10.03_x64/IDE/data/ipcores/GAO_LITE"/>
+        <Option type="include_path" value="D:/embedded/projects_fpga/FPGA_LAB5/impl/gwsynthesis/RTL_GAO"/>
+        <Option type="looplimit" value="2000"/>
+        <Option type="output_file" value="D:\embedded\projects_fpga\FPGA_LAB5\impl\gwsynthesis\FPGA_LAB5.vg"/>
+        <Option type="print_all_synthesis_warning" value="0"/>
+        <Option type="ram_rw_check" value="0"/>
+        <Option type="top_module" value="soft_spi"/>
+        <Option type="vcc" value="1.0"/>
+        <Option type="vccx" value="3.3"/>
+        <Option type="verilog_language" value="verilog-2001"/>
+        <Option type="vhdl_language" value="vhdl-1993"/>
+    </OptionList>
+</Project>

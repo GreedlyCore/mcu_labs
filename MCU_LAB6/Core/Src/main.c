@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -49,6 +50,7 @@ DMA_HandleTypeDef hdma_adc1;
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim4;
+TIM_HandleTypeDef htim5;
 
 UART_HandleTypeDef huart2;
 DMA_HandleTypeDef hdma_usart2_tx;
@@ -57,7 +59,7 @@ DMA_HandleTypeDef hdma_usart2_tx;
 uint16_t ADC_RESULT_BUFFER[2]; // [RANK1, RANK2] == [POT, SERVO] -- i guess
 float external_pot_angle = 0.0f;
 float servo_pot_angle = 0.0f;
-float error = 0.0f;
+float speed_error = 0.0f;
 float prev_error = 0.0f;
 float diff = 0.0f;
 float integral = 0.0f;
@@ -65,14 +67,18 @@ float control = 0.0f;
 uint32_t DUTY_CYCLE = 0; // in %
 
 
-float kp = 2.0f;
-float ki = 4.0f;
+float kp = 1.0f;
+float ki = 0.0f;
 float kd = 2.0f;
 
-volatile bool adc_data_ready = false;
+volatile bool encoder_data_ready = false;
 
-int16_t encoder_speed;
-int32_t encoder_position;
+int64_t pot_encoder_speed;
+int64_t pot_encoder_position;
+
+int64_t motor_encoder_speed;
+int64_t motor_encoder_position;
+
 
 uint32_t timer_counter = 0;
 /* USER CODE END PV */
@@ -83,9 +89,10 @@ static void MX_GPIO_Init(void);
 static void MX_DMA_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_TIM4_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_TIM5_Init(void);
+static void MX_TIM4_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -100,12 +107,13 @@ bool get_sign(float x) {
 }
 
 typedef struct{
-	int16_t speed;
+	int64_t speed;
 	int64_t position;
 	uint32_t last_counter_value;
 } encoder_instance;
 
-encoder_instance enc_inst;
+encoder_instance motor_enc_inst;
+encoder_instance pot_enc_inst;
 
 typedef struct{
   uint16_t header;
@@ -122,9 +130,8 @@ message msg;
 
 void sendToSimulink() {
 	msg.header = message_header;
-	msg.pot_speed = floorf(ADC_RESULT_BUFFER[0] * 100); // giving reference speed from servo,how to give direction?
-	// divide [0; 4095] into [0; 2048] - clockwise and [2048; 4095] - anti clock wise ?
-	msg.motor_speed = floorf(ADC_RESULT_BUFFER[1] * 100); // TODO: replace with encoder_speed (int??)7
+	msg.pot_speed = abs(pot_encoder_position);
+	msg.motor_speed = abs(motor_encoder_speed);
 //	msg.error = floorf(error * 100);
 //	msg.control = floorf(control * 100);
 	msg.terminator = message_terminator;
@@ -135,10 +142,11 @@ void sendToSimulink() {
     memset(buffer, 0, sizeof(buffer));
 }
 
+float dellta = 0.004f;
 
-update_encoder(encoder_instance *encoder_value, TIM_HandleTypeDef *htim){
+void update_encoder(encoder_instance *encoder_value, TIM_HandleTypeDef *htim){
 
-	uint32_t temp_counter = __HAL_TIM_GET_COUNTER(htim);
+	uint32_t temp_counter = __HAL_TIM_GET_COUNTER(htim) / 1050;
 	static uint8_t first_time = 0;
 	if(!first_time)
 	{
@@ -156,24 +164,24 @@ update_encoder(encoder_instance *encoder_value, TIM_HandleTypeDef *htim){
 			if(__HAL_TIM_IS_TIM_COUNTING_DOWN(htim))
 			{
 				//overflow happened ???
-				encoder_value->speed = -encoder_value->last_counter_value - (__HAL_TIM_GET_AUTORELOAD(htim) - temp_counter);
+				encoder_value->speed = ( -encoder_value->last_counter_value - (__HAL_TIM_GET_AUTORELOAD(htim) - temp_counter) ) / dellta;
 			}
 			else
 			{
-				encoder_value->speed = temp_counter - encoder_value->last_counter_value;
+				encoder_value->speed = (temp_counter - encoder_value->last_counter_value) / dellta;
 			}
 		}
 			if(__HAL_TIM_IS_TIM_COUNTING_DOWN(htim))
 			{
-				encoder_value->speed = temp_counter - encoder_value->last_counter_value;
+				encoder_value->speed = (temp_counter - encoder_value->last_counter_value)/dellta;
 			}
 			else
 			{
 				// some overflow happened ???
-				encoder_value->speed = temp_counter + (__HAL_TIM_GET_AUTORELOAD(htim) -encoder_value->last_counter_value);
+				encoder_value->speed = ( temp_counter + (__HAL_TIM_GET_AUTORELOAD(htim) -encoder_value->last_counter_value) ) / dellta;
 			}
 	}
-	encoder_value->position += encoder_value->speed;
+	encoder_value->position += dellta * encoder_value->speed;
 	encoder_value->last_counter_value = temp_counter;
 }
 
@@ -217,48 +225,68 @@ int main(void)
   MX_DMA_Init();
   MX_ADC1_Init();
   MX_USART2_UART_Init();
-  MX_TIM4_Init();
   MX_TIM3_Init();
   MX_TIM1_Init();
+  MX_TIM5_Init();
+  MX_TIM4_Init();
   /* USER CODE BEGIN 2 */
   HAL_ADC_Start_DMA(&hadc1, ADC_RESULT_BUFFER, 2);
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
 //  HAL_TIM_Base_Start_IT(&htim2);
   HAL_TIM_Base_Start_IT(&htim1);
+  HAL_TIM_Encoder_Start(&htim5, TIM_CHANNEL_ALL); // both -- channel 3, 4
   HAL_TIM_Encoder_Start(&htim4, TIM_CHANNEL_ALL); // both -- channel 3, 4
+
+  reset_encoder(&pot_enc_inst);
+  reset_encoder(&motor_enc_inst);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  //TODO: not right servo_pot_angle - external_pot_angle --> need to bet external pot + encoder value ///....
-	  // FROM ADC --> two pot values
-	  // from timers --> encoder value
-	  if (adc_data_ready)
+	  if (encoder_data_ready)
 	  {
-		  adc_data_ready = false;
-		  error = servo_pot_angle - external_pot_angle;
-		  diff = (error - prev_error); // INTERRUPTS between timer should be +- same time, else we need to divide by delta_time(can get from timer) to get derivative ?
-		  integral = integral + error*0.001f;
-		  control = kp*error + ki*integral; // + ki*integral + kd*diff;
-		  if ( fabs(error) >= 40.0 ){
-			  ////	   set Duty Cycle: 1000 <--> 100%  ; 905 <-> 90.5%
-			  HAL_GPIO_WritePin(DIR1_GPIO_Port, DIR1_Pin, get_sign(error)); // set direction of the servo
+		  encoder_data_ready = false;
+		  // TODO 1: MAX, MIN ERROR? to tune it for setting DUTY_CYCLE !!!
+		  speed_error = motor_encoder_speed - pot_encoder_position;
+		  diff = (speed_error - prev_error); // INTERRUPTS between timer should be +- same time, else we need to divide by delta_time(can get from timer) to get derivative ?
+		  integral = integral + speed_error*0.001f;
+		  control = kp*speed_error + ki*integral; // + ki*integral + kd*diff;
 
-			  // MAX Error: 270 (obviously)
-			  DUTY_CYCLE = (uint32_t) (control > 0) ? control : -control;
-			  if (DUTY_CYCLE > 999){
-				  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 999);
-			  }else{
-				  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, DUTY_CYCLE);
-			  }
-			  prev_error = error;
+		  HAL_GPIO_WritePin(DIR1_GPIO_Port, DIR1_Pin, get_sign(pot_encoder_position));
 
-		  } else __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
-		  sendToSimulink();
-		  if (error >= 0.0) HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-		  else HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
+//		  DUTY_CYCLE = (uint32_t) (control > 0) ? control : -control;
+		  DUTY_CYCLE = (uint32_t) 999;
+		  if (DUTY_CYCLE > 999){
+			  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 999);
+		  }else{
+			  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, DUTY_CYCLE);
+		  }
+		  // TODO 2: stop control, if error if too low
+
+		  // TODO 3: фильтр скользящего среднего, ошибки чистить
+
+		  // TODO 4:
+		  // ну когда скорость 0-10% он может ошибку в какие-то моменты отрицательной брать, соответсвенно менять резко направление
+
+//		  if ( fabs(error) >= 40.0 ){
+//			  ////	   set Duty Cycle: 1000 <--> 100%  ; 905 <-> 90.5%
+//			  HAL_GPIO_WritePin(DIR1_GPIO_Port, DIR1_Pin, get_sign(error)); // set direction of the servo
+//
+//			  // MAX Error: 270 (obviously)
+
+//			  if (DUTY_CYCLE > 999){
+//				  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 999);
+//			  }else{
+//				  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, DUTY_CYCLE);
+//			  }
+			  prev_error = speed_error;
+//
+//		  } else __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+//		  sendToSimulink();
+//		  if (error >= 0.0) HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+//		  else HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
 			}
 
     /* USER CODE END WHILE */
@@ -285,12 +313,11 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 6;
   RCC_OscInitStruct.PLL.PLLN = 90;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
@@ -306,8 +333,8 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
@@ -364,6 +391,7 @@ static void MX_ADC1_Init(void)
 
   /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
   */
+  sConfig.Channel = ADC_CHANNEL_10;
   sConfig.Rank = 2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
@@ -394,9 +422,9 @@ static void MX_TIM1_Init(void)
 
   /* USER CODE END TIM1_Init 1 */
   htim1.Instance = TIM1;
-  htim1.Init.Prescaler = 45-1;
+  htim1.Init.Prescaler = 90-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 401 - 1;
+  htim1.Init.Period = 400 - 1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -440,7 +468,7 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 45-1;
+  htim3.Init.Prescaler = 90-1;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim3.Init.Period = 1000-1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -489,7 +517,7 @@ static void MX_TIM4_Init(void)
 
   /* USER CODE END TIM4_Init 1 */
   htim4.Instance = TIM4;
-  htim4.Init.Prescaler = 1-1;
+  htim4.Init.Prescaler = 0;
   htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
   htim4.Init.Period = 65535;
   htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
@@ -498,11 +526,11 @@ static void MX_TIM4_Init(void)
   sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC1Filter = 5;
+  sConfig.IC1Filter = 0;
   sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
   sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
   sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
-  sConfig.IC2Filter = 0;
+  sConfig.IC2Filter = 10;
   if (HAL_TIM_Encoder_Init(&htim4, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -516,6 +544,55 @@ static void MX_TIM4_Init(void)
   /* USER CODE BEGIN TIM4_Init 2 */
 
   /* USER CODE END TIM4_Init 2 */
+
+}
+
+/**
+  * @brief TIM5 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_TIM5_Init(void)
+{
+
+  /* USER CODE BEGIN TIM5_Init 0 */
+
+  /* USER CODE END TIM5_Init 0 */
+
+  TIM_Encoder_InitTypeDef sConfig = {0};
+  TIM_MasterConfigTypeDef sMasterConfig = {0};
+
+  /* USER CODE BEGIN TIM5_Init 1 */
+
+  /* USER CODE END TIM5_Init 1 */
+  htim5.Instance = TIM5;
+  htim5.Init.Prescaler = 0;
+  htim5.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim5.Init.Period = 4294967295;
+  htim5.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim5.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+  sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC1Filter = 5;
+  sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+  sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+  sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+  sConfig.IC2Filter = 10;
+  if (HAL_TIM_Encoder_Init(&htim5, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim5, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN TIM5_Init 2 */
+
+  /* USER CODE END TIM5_Init 2 */
 
 }
 
@@ -595,14 +672,6 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(DIR1_GPIO_Port, DIR1_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PA1 */
-  GPIO_InitStruct.Pin = GPIO_PIN_1;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  GPIO_InitStruct.Alternate = GPIO_AF2_TIM5;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
   /*Configure GPIO pins : LED_Pin LED1_Pin LED2_Pin */
   GPIO_InitStruct.Pin = LED_Pin|LED1_Pin|LED2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -629,15 +698,30 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			external_pot_angle = ADC_RESULT_BUFFER[0]; // [0 ; 4095] value of position
 			servo_pot_angle = ADC_RESULT_BUFFER[1]; // [0 ; 4095] value of position
 			HAL_ADC_Start_DMA(&hadc1, ADC_RESULT_BUFFER, 2);
-			adc_data_ready = true;
+
+			update_encoder(&motor_enc_inst, &htim5);
+			motor_encoder_position = motor_enc_inst.position;
+			motor_encoder_speed = motor_enc_inst.speed;
+
+			update_encoder(&pot_enc_inst, &htim4);
+			pot_encoder_position = pot_enc_inst.position;
+			pot_encoder_speed = pot_enc_inst.speed;
+			encoder_data_ready = true;
 		}
 
-		if(htim->Instance == TIM4){
-			timer_counter = __HAL_TIM_GET_COUNTER(&htim4);
-			update_encoder(&enc_inst, &htim4);
-			encoder_position = enc_inst.position;
-			encoder_speed = enc_inst.speed;
-		}
+//		if(htim->Instance == TIM5){
+//			timer_counter = __HAL_TIM_GET_COUNTER(&htim5);
+//			update_encoder(&motor_enc_inst, &htim5);
+//			motor_encoder_position = motor_enc_inst.position;
+//			motor_encoder_speed = motor_enc_inst.speed;
+//		}
+//
+//		if(htim->Instance == TIM4){
+//			timer_counter = __HAL_TIM_GET_COUNTER(&htim4);
+//			update_encoder(&pot_enc_inst, &htim4);
+//			pot_encoder_position = pot_enc_inst.position;
+//			pot_encoder_speed = pot_enc_inst.speed;
+//		}
 }
 
 /* USER CODE END 4 */

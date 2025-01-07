@@ -1,0 +1,29 @@
+{
+ "Device" : "GW2A-18C",
+ "Files" : [
+  {
+   "Path" : "D:/embedded/projects_fpga/FPGA_LAB5/src/bin2bcd.v",
+   "Type" : "verilog"
+  },
+  {
+   "Path" : "D:/embedded/projects_fpga/FPGA_LAB5/src/gowin_rpll/gowin_rpll.v",
+   "Type" : "verilog"
+  },
+  {
+   "Path" : "D:/embedded/projects_fpga/FPGA_LAB5/src/led.v",
+   "Type" : "verilog"
+  },
+  {
+   "Path" : "D:/embedded/projects_fpga/FPGA_LAB5/src/soft_spi.v",
+   "Type" : "verilog"
+  }
+ ],
+ "IncludePath" : [
+
+ ],
+ "LoopLimit" : 2000,
+ "ResultFile" : "D:/embedded/projects_fpga/FPGA_LAB5/impl/temp/rtl_parser.result",
+ "Top" : "soft_spi",
+ "VerilogStd" : "verilog_2001",
+ "VhdlStd" : "vhdl_93"
+}

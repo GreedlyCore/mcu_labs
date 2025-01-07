@@ -1,0 +1,36 @@
+[
+ {
+  "InstFile" : "D:/embedded/projects_fpga/FPGA_LAB5/src/soft_spi.v",
+  "InstLine" : 1,
+  "InstName" : "soft_spi",
+  "ModuleFile" : "D:/embedded/projects_fpga/FPGA_LAB5/src/soft_spi.v",
+  "ModuleLine" : 1,
+  "ModuleName" : "soft_spi",
+  "SubInsts" : [
+   {
+    "InstFile" : "D:/embedded/projects_fpga/FPGA_LAB5/src/soft_spi.v",
+    "InstLine" : 10,
+    "InstName" : "my_rpll",
+    "ModuleFile" : "D:/embedded/projects_fpga/FPGA_LAB5/src/gowin_rpll/gowin_rpll.v",
+    "ModuleLine" : 10,
+    "ModuleName" : "Gowin_rPLL"
+   },
+   {
+    "InstFile" : "D:/embedded/projects_fpga/FPGA_LAB5/src/soft_spi.v",
+    "InstLine" : 17,
+    "InstName" : "blinking_led",
+    "ModuleFile" : "D:/embedded/projects_fpga/FPGA_LAB5/src/led.v",
+    "ModuleLine" : 1,
+    "ModuleName" : "led"
+   },
+   {
+    "InstFile" : "D:/embedded/projects_fpga/FPGA_LAB5/src/soft_spi.v",
+    "InstLine" : 44,
+    "InstName" : "bcd_converter",
+    "ModuleFile" : "D:/embedded/projects_fpga/FPGA_LAB5/src/bin2bcd.v",
+    "ModuleLine" : 2,
+    "ModuleName" : "bin2bcd"
+   }
+  ]
+ }
+]
