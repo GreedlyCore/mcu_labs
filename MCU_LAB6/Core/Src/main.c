@@ -26,6 +26,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
+#define M_PI 3.14159
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,20 +58,20 @@ DMA_HandleTypeDef hdma_usart2_tx;
 
 /* USER CODE BEGIN PV */
 
-float sampling_period = 0.0005f;
+float sampling_period = 0.01f;
 
 int16_t motor_enc_prev = 0;
 int16_t target_speed;
-int16_t max_target_speed = 50;
-int16_t motor_enc;
+int16_t max_target_speed = 35;
+int32_t motor_enc;
 int16_t real_motor_speed;
 int16_t speed_error;
 
 int16_t max_duty = 99;
-int16_t sum_error = 0;
+int16_t duty = 0;
 int16_t integral_error = 0;
-int16_t kp = 4;
-int16_t ki = 10;
+int16_t kp = 1;
+int16_t ki = 15;
 
 /* USER CODE END PV */
 
@@ -90,7 +91,7 @@ static void MX_TIM4_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-#define ENCODER_PULSES_PER_REV 1050 // PPR, Pulses Per Revolution
+#define ENCODER_PULSES_PER_REV 7 // PPR, Pulses Per Revolution
 //#define message_header 0xABCD
 //#define message_terminator 0xBEDA
 #define message_header 'N'
@@ -101,21 +102,35 @@ struct __attribute__((__packed__)) msg {
 	float target_speed;
 	float real_speed;
 	float real_pos;
+	float duty;
 	uint8_t terminator;
 };
 struct msg telemetry = {'N', 0, 0, 0, 'E'};
-
-
-
 
 void sendToSimulink() {
 	telemetry.header = message_header;
 	telemetry.target_speed = target_speed;
 	telemetry.real_speed = real_motor_speed;
 	telemetry.real_pos = motor_enc;
+	telemetry.duty = duty;
 	telemetry.terminator = message_terminator;
     HAL_UART_Transmit_DMA(&huart2, (uint8_t*)&telemetry, sizeof(telemetry));
 }
+
+void set_duty (int16_t duty) {
+	if (duty > 0) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, duty);
+	}
+	else if (duty < 0) {
+		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, -duty);
+	}
+	else {
+		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
+	}
+}
+
 
 /* USER CODE END 0 */
 
@@ -168,52 +183,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-//	  if (encoder_data_ready)
-//	  {
-//		  encoder_data_ready = false;
-//		  // TODO 1: MAX, MIN ERROR? to tune it for setting DUTY_CYCLE !!!
-//		  speed_error = motor_encoder_speed - pot_encoder_position;
-//		  diff = (speed_error - prev_error); // INTERRUPTS between timer should be +- same time, else we need to divide by delta_time(can get from timer) to get derivative ?
-//		  integral = integral + speed_error*0.001f;
-//		  control = kp*speed_error + ki*integral; // + ki*integral + kd*diff;
-//
-//		  HAL_GPIO_WritePin(DIR1_GPIO_Port, DIR1_Pin, get_sign(pot_encoder_position));
-//
-////		  DUTY_CYCLE = (uint32_t) (control > 0) ? control : -control;
-////		  DUTY_CYCLE = (uint32_t) 999;
-//		  if (DUTY_CYCLE > 999)
-//		  {
-//			  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 999);
-//		  }
-//		  else
-//		  {
-//			  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, DUTY_CYCLE);
-//		  }
-		  // TODO 2: stop control, if error if too low
 
-		  // TODO 3: фильтр скользящего среднего, ошибки чистить
-
-		  // TODO 4:
-		  // ну когда скорость 0-10% он может ошибку в какие-то моменты отрицательной брать, соответсвенно менять резко направление
-
-//		  if ( fabs(error) >= 40.0 ){
-//			  ////	   set Duty Cycle: 1000 <--> 100%  ; 905 <-> 90.5%
-//			  HAL_GPIO_WritePin(DIR1_GPIO_Port, DIR1_Pin, get_sign(error)); // set direction of the servo
-//
-//			  // MAX Error: 270 (obviously)
-
-//			  if (DUTY_CYCLE > 999){
-//				  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 999);
-//			  }else{
-//				  __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, DUTY_CYCLE);
-//			  }
-//			  prev_error = speed_error;
-//
-//		  } else __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
-//		  sendToSimulink();
-//		  if (error >= 0.0) HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-//		  else HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
-//			}
 
     /* USER CODE END WHILE */
 
@@ -350,7 +320,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 90-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 10000 - 1;
+  htim1.Init.Period = 12000 - 1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -617,28 +587,13 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
-void set_duty (int16_t duty) {
-	if (duty > 0) {
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 0);
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, duty);
-	}
-	else if (duty < 0) {
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, -duty);
-	}
-	else {
-		__HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, 0);
-	}
-}
-
-
 // TIM1 INTERRUPT ONLY
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 {
 	target_speed = __HAL_TIM_GET_COUNTER(&htim4);
 	motor_enc = __HAL_TIM_GET_COUNTER(&htim5);
-	real_motor_speed = -(motor_enc - motor_enc_prev);
+//	real_motor_speed = ( -(motor_enc - motor_enc_prev) * 2 * M_PI ) / ENCODER_PULSES_PER_REV; //TODO: measure it ! turn float everything
+	real_motor_speed = -(motor_enc - motor_enc_prev) ; // / ( ENCODER_PULSES_PER_REV );
 
 	if (target_speed > max_target_speed) {
 		target_speed = max_target_speed;
@@ -654,11 +609,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
 	sendToSimulink();
 
 	integral_error += speed_error * 0.001f;
-	sum_error = kp*speed_error + ki*integral_error;
-	if (sum_error > max_duty) sum_error = max_duty;
-	if (sum_error < -max_duty) sum_error = -max_duty;
+	duty += kp*speed_error + ki*integral_error;
+	if (duty > max_duty) duty = max_duty;
+	if (duty < -max_duty) duty = -max_duty;
 
-	set_duty(sum_error);
+	set_duty(duty);
 	motor_enc_prev = motor_enc;
 }
 

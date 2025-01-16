@@ -52,6 +52,8 @@ TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 
 UART_HandleTypeDef huart2;
+DMA_HandleTypeDef hdma_usart2_tx;
+DMA_HandleTypeDef hdma_usart2_rx;
 
 /* USER CODE BEGIN PV */
 
@@ -73,25 +75,30 @@ static void MX_TIM2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-#define message_header 0xABCD
-#define message_terminator 0xBEDA
+#define message_header 'N'
+#define message_terminator 'E'
 
-typedef struct {
-    uint16_t header;
-    uint16_t number; //ex: float
-    uint16_t terminator;
-} message;
+//typedef __attribute__((__packed__)) struct {
+//    uint16_t header;
+//    uint16_t number; //ex: float
+//    uint16_t terminator;
+//} message;
+//
+//message msg;
 
-message msg;
+struct __attribute__((__packed__)) message {
+	uint16_t header;
+	uint16_t number;
+	uint16_t terminator;
+};
 
-void sendFloatToSimulink(float value) {
+struct message msg = {'N', 0, 'E'};
+
+void sendToSimulink(uint16_t value) {
 	msg.header = message_header;
 	msg.number = value;
 	msg.terminator = message_terminator;
-    uint8_t buffer[sizeof(msg)]; // buffer is long enough
-    memcpy(buffer, &msg, sizeof(msg));
-    HAL_UART_Transmit_IT(&huart2, (uint8_t*)&msg, sizeof(msg)); // send message
-    memset(buffer, 0, sizeof(buffer));
+    HAL_UART_Transmit_DMA( &huart2, (uint8_t*)&msg, sizeof(msg) ); // send message
 }
 
 int num = 0;
@@ -166,11 +173,9 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim1);
   HAL_TIM_Base_Start_IT(&htim2);
   HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
-//  uint32_t length = 1000;
-//  HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1);
   HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, 3);
-  //  HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10);
+  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1) != HAL_OK) Error_Handler();
+  //  HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10); // desperation...
 
   uint16_t freq = 1000;
   uint32_t APB2_freq = HAL_RCC_GetPCLK2Freq()*2;
@@ -214,7 +219,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 6;
+  RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 90;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 2;
@@ -269,7 +274,7 @@ static void MX_ADC1_Init(void)
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DMAContinuousRequests = ENABLE;
+  hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
@@ -438,7 +443,7 @@ static void MX_USART2_UART_Init(void)
 
   /* USER CODE END USART2_Init 1 */
   huart2.Instance = USART2;
-  huart2.Init.BaudRate = 900000;
+  huart2.Init.BaudRate = 38400;
   huart2.Init.WordLength = UART_WORDLENGTH_8B;
   huart2.Init.StopBits = UART_STOPBITS_1;
   huart2.Init.Parity = UART_PARITY_NONE;
@@ -463,8 +468,15 @@ static void MX_DMA_Init(void)
 
   /* DMA controller clock enable */
   __HAL_RCC_DMA2_CLK_ENABLE();
+  __HAL_RCC_DMA1_CLK_ENABLE();
 
   /* DMA interrupt init */
+  /* DMA1_Stream5_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream5_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream5_IRQn);
+  /* DMA1_Stream6_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Stream6_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Stream6_IRQn);
   /* DMA2_Stream0_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 0, 0);
   HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
@@ -503,6 +515,15 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
+    if(hadc->Instance == ADC1) {
+    	if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1) != HAL_OK) {
+    		  Error_Handler();
+    	  }
+		sendToSimulink( value_adc );
+    }
+}
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	if (htim == &htim1){
 		if(htim->Instance == TIM1){
@@ -513,20 +534,13 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 		}
 	}
-
-	if (htim == &htim2){
-		if(htim->Instance == TIM2){
-
-			HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1);
-			sendFloatToSimulink( value_adc );
-		}
-	}
+//	if (htim == &htim2){
+//		if(htim->Instance == TIM2){
+//			HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1);
+//			sendToSimulink( value_adc );
+//		}
+//	}
 }
-
-//void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc) {
-//  HAL_GPIO_TogglePin(LED2_GPIO_Port, LED2_Pin);
-//}
-
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 
@@ -537,12 +551,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	      	 if (numbers_received == 0) {
 	      	            	ampl = number2;
 	      	            	numbers_received++;
-	      	            	HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, 4);
+	      	            	HAL_UART_Receive_DMA(&huart2, (uint8_t*)rx_buffer, 4);
 	      	            }
 	      	 else if(numbers_received == 1) {
 	      	            	freq = number2;
 	      	            	numbers_received = 0;
-	      	            	HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, 3);
+	      	            	HAL_UART_Receive_DMA(&huart2, (uint8_t*)rx_buffer, 3);
 	      	            }
 	      }
 
@@ -550,24 +564,6 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 
   }
 }
-
-//void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
-//	int number;
-//    if ( sscanf(rx_buffer, "%d", &number) == 1) {
-//    	 float number2 = number / 100.0f;
-//    	 if (numbers_received == 0) {
-//    	            	ampl = number2;
-//    	            	numbers_received++;
-//    	            }
-//    	 else if(numbers_received == 1) {
-//    	            	freq = number2;
-//    	            	numbers_received = 0;
-//    	            }
-//    }
-//    HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10);
-//    memset(rx_buffer, 0, sizeof(rx_buffer));
-//}
-
 /* USER CODE END 4 */
 
 /**
