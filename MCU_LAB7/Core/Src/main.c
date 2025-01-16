@@ -402,13 +402,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     }
 }
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
-{
-	if (htim.Instance == TIM1)
-	{
-//		update_display_with_number();
-	}
-}
+//void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef* htim)
+//{
+//	if (htim->Instance == TIM1)
+//	{
+////		update_display_with_number();
+//	}
+//}
 
 
 /* USER CODE END 4 */

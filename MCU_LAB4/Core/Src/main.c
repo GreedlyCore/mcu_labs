@@ -75,31 +75,32 @@ static void MX_TIM2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-#define message_header 'N'
-#define message_terminator 'E'
+//#define message_header 'N'
+//#define message_terminator 'E'
+#define UART_TX_BUFFER_SIZE 32
 
-//typedef __attribute__((__packed__)) struct {
-//    uint16_t header;
-//    uint16_t number; //ex: float
-//    uint16_t terminator;
-//} message;
+
+//struct __attribute__((__packed__)) message{
+//    uint8_t header;
+//    uint32_t number; //ex: float
+//    uint8_t terminator;
+//};
+
+
+//struct __attribute__((__packed__)) message {
+//	uint16_t header;
+//	uint16_t number;
+//	uint16_t terminator;
+//};
 //
-//message msg;
-
-struct __attribute__((__packed__)) message {
-	uint16_t header;
-	uint16_t number;
-	uint16_t terminator;
-};
-
-struct message msg = {'N', 0, 'E'};
-
-void sendToSimulink(uint16_t value) {
-	msg.header = message_header;
-	msg.number = value;
-	msg.terminator = message_terminator;
-    HAL_UART_Transmit_DMA( &huart2, (uint8_t*)&msg, sizeof(msg) ); // send message
-}
+//struct message msg = {'N', 0, 'E'};
+//
+//void sendToSimulink(uint32_t value) {
+//	msg.header = message_header;
+//	msg.number = value;
+//	msg.terminator = message_terminator;
+//    HAL_UART_Transmit_DMA( &huart2, (uint8_t*)&msg, sizeof(msg) ); // send message
+//}
 
 int num = 0;
 float time = 0;
@@ -109,7 +110,7 @@ float dt = 1.0 / 4000.0; // 4000 points per second - sample rate
 bool cmd_executed = false;
 
 char rx_buffer[50];
-char tx_buffer[50];
+uint8_t tx_buffer[UART_TX_BUFFER_SIZE];
 
 float received_numbers[2];
 int numbers_received = 0;
@@ -129,7 +130,8 @@ uint32_t wave(float t) {
 	return (uint32_t) (res * ampl *(4095/(v_ref)));
 }
 
-uint32_t value_adc = 0;
+float value_adc = 0;
+uint32_t adc_buffer[1];
 
 /* USER CODE END 0 */
 
@@ -174,7 +176,7 @@ int main(void)
   HAL_TIM_Base_Start_IT(&htim2);
   HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
   HAL_UART_Receive_IT(&huart2, (uint8_t*)rx_buffer, 3);
-  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1) != HAL_OK) Error_Handler();
+  if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc_buffer, 1) != HAL_OK) Error_Handler();
   //  HAL_UARTEx_ReceiveToIdle_IT(&huart2, (uint8_t*)rx_buffer, 10); // desperation...
 
   uint16_t freq = 1000;
@@ -357,7 +359,7 @@ static void MX_TIM1_Init(void)
   htim1.Instance = TIM1;
   htim1.Init.Prescaler = 90-1;
   htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim1.Init.Period = 250+1;
+  htim1.Init.Period = 250-1;
   htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim1.Init.RepetitionCounter = 0;
   htim1.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
@@ -516,11 +518,12 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc) {
+	value_adc = (float) (adc_buffer[0] / 4095.0) * 3.3;
     if(hadc->Instance == ADC1) {
-    	if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1) != HAL_OK) {
+    	if (HAL_ADC_Start_DMA(&hadc1, (uint32_t*) adc_buffer, 1) != HAL_OK) {
     		  Error_Handler();
     	  }
-		sendToSimulink( value_adc );
+//		sendToSimulink( value_adc );
     }
 }
 
@@ -530,16 +533,17 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			time += dt;
 			w = wave(time);
 			HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, w);
-			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-
+//			HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+//			sendToSimulink( value_adc );
+			snprintf((char*)tx_buffer, sizeof(tx_buffer), "v=%f\r\n", value_adc);
+			HAL_UART_Transmit_IT(&huart2, tx_buffer, strlen((char*)tx_buffer));
 		}
 	}
 //	if (htim == &htim2){
 //		if(htim->Instance == TIM2){
-//			HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1);
-//			sendToSimulink( value_adc );
+////			HAL_ADC_Start_DMA(&hadc1, (uint32_t*) &value_adc, 1);
+////			sendToSimulink( value_adc );
 //		}
-//	}
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
