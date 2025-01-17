@@ -551,14 +551,13 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
   if(huart == &huart2) {
 	  	int number;
 	      if ( sscanf(rx_buffer, "%d", &number) == 1) {
-	      	 float number2 = number / 100.0f;
 	      	 if (numbers_received == 0) {
-	      	            	ampl = number2;
+	      	            	ampl = number / 100.0f;
 	      	            	numbers_received++;
 	      	            	HAL_UART_Receive_DMA(&huart2, (uint8_t*)rx_buffer, 4);
 	      	            }
 	      	 else if(numbers_received == 1) {
-	      	            	freq = number2;
+	      	            	freq = number / 100.0f;
 	      	            	numbers_received = 0;
 	      	            	HAL_UART_Receive_DMA(&huart2, (uint8_t*)rx_buffer, 3);
 	      	            }
